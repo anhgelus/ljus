@@ -26,7 +26,7 @@ type Middleware func(Handler, *StatusWriter, *http.Request)
 // Server is handling requests.
 type Server struct {
 	middlewares *list.List
-	handler     Handler
+	routes      *list.List
 	mux         *http.ServeMux
 }
 
@@ -55,6 +55,7 @@ func New() *Server {
 func NewWithBase(mux *http.ServeMux) *Server {
 	return &Server{
 		middlewares: list.New(),
+		routes:      list.New(),
 		mux:         mux,
 	}
 }
@@ -63,14 +64,20 @@ func NewWithBase(mux *http.ServeMux) *Server {
 //
 // See [Server.Serve] and [Server.ServeFastCGI] to serve requests directly.
 func (s *Server) Handler() http.Handler {
-	s.handler = func(w *StatusWriter, r *http.Request) {
+	for e := s.routes.Front(); e != nil; e = e.Next() {
+		hh := e.Value.(*Route)
+		s.mux.Handle(hh.pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hh.handler(w.(*StatusWriter), r)
+		}))
+	}
+	handler := func(w *StatusWriter, r *http.Request) {
 		s.mux.ServeHTTP(w, r)
 	}
 	for e := s.middlewares.Back(); e != nil; e = e.Prev() {
-		s.handler = e.Value.(func(Handler) Handler)(s.handler)
+		handler = e.Value.(func(Handler) Handler)(handler)
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s.handler(&StatusWriter{ResponseWriter: w}, r)
+		handler(&StatusWriter{ResponseWriter: w}, r)
 	})
 }
 
