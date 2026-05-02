@@ -1,4 +1,4 @@
-package ljus
+package middleware
 
 import (
 	"context"
@@ -8,16 +8,26 @@ import (
 	"math"
 	"net/http"
 	"time"
+
+	"tangled.org/anhgelus.world/ljus"
 )
 
-func MiddlewareLog(cancelCause func(context.Context) context.CancelCauseFunc, logNotFound, logBadRequest bool) Middleware {
-	return func(next Handler, w *StatusWriter, r *http.Request) {
-		log := slog.With("uri", r.RequestURI)
+// Log takes a [slog.Logger] to log every requests.
+func Log(
+	logger *slog.Logger,
+	cancelCause func(context.Context) context.CancelCauseFunc,
+	logNotFound, logBadRequest bool,
+) ljus.Middleware {
+	return func(next ljus.Handler, w *ljus.StatusWriter, r *http.Request) {
+		log := logger.With("uri", r.RequestURI)
 		now := time.Now()
 		defer func() {
 			if err := recover(); err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				log.Error("panic!", "error", err, "duration", time.Since(now))
+				if cancelCause == nil {
+					return
+				}
 				switch e := err.(type) {
 				case error:
 					cancelCause(r.Context())(e)
@@ -51,11 +61,12 @@ func MiddlewareLog(cancelCause func(context.Context) context.CancelCauseFunc, lo
 	}
 }
 
-func MiddlewareHeaders(domain string, cacheDur time.Duration) Middleware {
+// SecurityHeaders adds common security-related headers to the request.
+func SecurityHeaders(domain string, cacheDur time.Duration) ljus.Middleware {
 	if cacheDur == 0 {
 		cacheDur = 15 * time.Minute
 	}
-	return func(next Handler, w *StatusWriter, r *http.Request) {
+	return func(next ljus.Handler, w *ljus.StatusWriter, r *http.Request) {
 		// prevent tracking
 		w.Header().Add("Referrer-Policy", "strict-origin-when-cross-origin")
 		// prevent iframe
