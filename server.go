@@ -35,7 +35,8 @@ type Server struct {
 // See [Server.ServeFastCGI] to handles HTTP requests over FastCGI.
 // See [Server.Handler] to get a [http.handler].
 func (s *Server) Serve(l net.Listener) error {
-	return http.Serve(l, s.Handler())
+	h := s.Handler()
+	return http.Serve(l, h)
 }
 
 // Serve handles HTTP requests transported with FastCGI.
@@ -43,7 +44,8 @@ func (s *Server) Serve(l net.Listener) error {
 // See [Server.Serve] to handles HTTP requests.
 // See [Server.Handler] to get a [http.handler].
 func (s *Server) ServeFastCGI(l net.Listener) error {
-	return fcgi.Serve(l, s.Handler())
+	h := s.Handler()
+	return fcgi.Serve(l, h)
 }
 
 // New returns a new [Server] with the default [http.ServeMux].
@@ -60,25 +62,19 @@ func NewWithBase(mux *http.ServeMux) *Server {
 	}
 }
 
+type key uint
+
+var KeyRouteName key = 0
+
 // Handler returns the [http.Handler] behind the [Server].
 //
 // See [Server.Serve] and [Server.ServeFastCGI] to serve requests directly.
 func (s *Server) Handler() http.Handler {
 	for e := s.routes.Front(); e != nil; e = e.Next() {
-		hh := e.Value.(*Route)
-		s.mux.Handle(hh.pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			hh.handler(w.(*StatusWriter), r)
-		}))
+		route := e.Value.(*Route)
+		s.mux.Handle(route.pattern, route.Handler(s.middlewares))
 	}
-	handler := func(w *StatusWriter, r *http.Request) {
-		s.mux.ServeHTTP(w, r)
-	}
-	for e := s.middlewares.Back(); e != nil; e = e.Prev() {
-		handler = e.Value.(func(Handler) Handler)(handler)
-	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handler(&StatusWriter{ResponseWriter: w}, r)
-	})
+	return s.mux
 }
 
 // Use a middleware for every requests.

@@ -20,6 +20,10 @@ func Log(
 ) ljus.Middleware {
 	return func(next ljus.Handler, w *ljus.StatusWriter, r *http.Request) {
 		log := logger.With("uri", r.RequestURI)
+		name, ok := r.Context().Value(ljus.KeyRouteName).(string)
+		if ok {
+			log = log.With("route_name", name)
+		}
 		now := time.Now()
 		defer func() {
 			if err := recover(); err != nil {
