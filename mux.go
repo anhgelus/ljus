@@ -1,4 +1,4 @@
-package internal
+package ljus
 
 import (
 	"context"
@@ -7,54 +7,8 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
-	"slices"
 	"time"
 )
-
-type StatusWriter struct {
-	http.ResponseWriter
-	Code int
-}
-
-func (w *StatusWriter) WriteHeader(statusCode int) {
-	w.ResponseWriter.WriteHeader(statusCode)
-	w.Code = statusCode
-}
-
-type Handler func(*StatusWriter, *http.Request)
-
-type Middleware func(Handler, *StatusWriter, *http.Request)
-
-type Mux struct {
-	middlewares []func(Handler) Handler
-	handler     Handler
-}
-
-func NewMux(base *http.ServeMux) *Mux {
-	return &Mux{handler: func(w *StatusWriter, r *http.Request) {
-		base.ServeHTTP(w, r)
-	}}
-}
-
-func (m *Mux) Handle() http.Handler {
-	slices.Reverse(m.middlewares)
-	for _, middle := range m.middlewares {
-		m.handler = middle(m.handler)
-	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		m.handler(&StatusWriter{ResponseWriter: w}, r)
-	})
-}
-
-func (m *Mux) Use(middlewares ...Middleware) {
-	for _, middle := range middlewares {
-		m.middlewares = append(m.middlewares, func(next Handler) Handler {
-			return func(w *StatusWriter, r *http.Request) {
-				middle(next, w, r)
-			}
-		})
-	}
-}
 
 func MiddlewareLog(cancelCause func(context.Context) context.CancelCauseFunc, logNotFound, logBadRequest bool) Middleware {
 	return func(next Handler, w *StatusWriter, r *http.Request) {
