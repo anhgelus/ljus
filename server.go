@@ -1,6 +1,8 @@
 package ljus
 
 import (
+	"context"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/fcgi"
@@ -27,22 +29,38 @@ type Server struct {
 	root *Group
 }
 
+func (s *Server) serve(ctx context.Context, l net.Listener, fn func(net.Listener, http.Handler) error) error {
+	errc := make(chan error, 1)
+	go func() {
+		errc <- fn(l, s.Handler())
+	}()
+	select {
+	case <-ctx.Done():
+		err := l.Close()
+		cause := context.Cause(ctx)
+		if err != nil {
+			cause = errors.Join(cause, err)
+		}
+		return cause
+	case err := <-errc:
+		return err
+	}
+}
+
 // Serve handles HTTP requests.
 //
 // See [Server.ServeFastCGI] to handles HTTP requests over FastCGI.
 // See [Server.Handler] to get a [http.handler].
-func (s *Server) Serve(l net.Listener) error {
-	h := s.Handler()
-	return http.Serve(l, h)
+func (s *Server) Serve(ctx context.Context, l net.Listener) error {
+	return s.serve(ctx, l, http.Serve)
 }
 
 // Serve handles HTTP requests transported with FastCGI.
 //
 // See [Server.Serve] to handles HTTP requests.
 // See [Server.Handler] to get a [http.handler].
-func (s *Server) ServeFastCGI(l net.Listener) error {
-	h := s.Handler()
-	return fcgi.Serve(l, h)
+func (s *Server) ServeFastCGI(ctx context.Context, l net.Listener) error {
+	return s.serve(ctx, l, fcgi.Serve)
 }
 
 // New returns a new [Server] with the default [http.ServeMux].
