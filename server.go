@@ -1,7 +1,6 @@
 package ljus
 
 import (
-	"container/list"
 	"net"
 	"net/http"
 	"net/http/fcgi"
@@ -25,9 +24,7 @@ type Middleware func(Handler, *StatusWriter, *http.Request)
 
 // Server is handling requests.
 type Server struct {
-	middlewares *list.List
-	routes      *list.List
-	mux         *http.ServeMux
+	root *Group
 }
 
 // Serve handles HTTP requests.
@@ -55,11 +52,7 @@ func New() *Server {
 
 // New returns a new [Server] with a given [http.ServeMux].
 func NewWithBase(mux *http.ServeMux) *Server {
-	return &Server{
-		middlewares: list.New(),
-		routes:      list.New(),
-		mux:         mux,
-	}
+	return &Server{NewGroup("")}
 }
 
 type key uint
@@ -70,20 +63,24 @@ var KeyRouteName key = 0
 //
 // See [Server.Serve] and [Server.ServeFastCGI] to serve requests directly.
 func (s *Server) Handler() http.Handler {
-	for e := s.routes.Front(); e != nil; e = e.Next() {
-		route := e.Value.(*Route)
-		s.mux.Handle(route.pattern, route.Handler(s.middlewares))
-	}
-	return s.mux
+	return s.root.Handler(s.root.inner.middlewares)
 }
 
 // Use a middleware for every requests.
 func (s *Server) Use(middlewares ...Middleware) {
 	for _, middle := range middlewares {
-		s.middlewares.PushFront(func(next Handler) Handler {
+		s.root.inner.middlewares.PushFront(func(next Handler) Handler {
 			return func(w *StatusWriter, r *http.Request) {
 				middle(next, w, r)
 			}
 		})
 	}
+}
+
+// Handle a [Route].
+//
+// See [NewRoute] and [NewGroup].
+func (s *Server) Handle(r Route) *Server {
+	s.root.Add(r)
+	return s
 }

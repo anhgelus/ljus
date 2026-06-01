@@ -6,50 +6,67 @@ import (
 	"net/http"
 )
 
-// Route represents an HTTP route.
-type Route struct {
+// Route represents a general HTTP route.
+//
+// See [SimpleRoute].
+// See [Group].
+type Route interface {
+	// Handler returns the [http.Handler] used.
+	Handler(middlewares *list.List) http.Handler
+	// Sets the Name of the [Route].
+	Name(name string) Route
+	// With add a [Middleware] to the [Route].
+	With(middlewares ...Middleware) Route
+	// Pattern returns the [http.ServeMux] pattern.
+	Pattern() string
+}
+
+// SimpleRoute is just a [Route].
+//
+// See [Group] to group multiple [Route].
+type SimpleRoute struct {
 	pattern     string
 	handler     Handler
 	name        string
 	middlewares *list.List
 }
 
-// Handle returns a new [Route] called for the specified pattern.
+// NewRoute returns a new [SimpleRoute] called for the specified pattern.
 //
 // See [Server.HandleFunc].
-func (s *Server) Handle(pattern string, handler http.Handler) *Route {
-	r := &Route{
+func NewRoute(pattern string, handler http.Handler) *SimpleRoute {
+	r := &SimpleRoute{
 		pattern:     pattern,
 		handler:     func(w *StatusWriter, r *http.Request) { handler.ServeHTTP(w, r) },
 		name:        "",
 		middlewares: list.New(),
 	}
-	s.routes.PushFront(r)
 	return r
 }
 
-// HandleFunc returns a new [Route] called for the specified pattern.
+// HandleFunc returns a new [SimpleRoute] called for the specified pattern.
 //
 // See [Server.Handle].
-func (s *Server) HandleFunc(pattern string, handler http.HandlerFunc) *Route {
-	return s.Handle(pattern, http.HandlerFunc(handler))
+func NewRouteFunc(pattern string, handler http.HandlerFunc) *SimpleRoute {
+	return NewRoute(pattern, http.HandlerFunc(handler))
 }
 
-// With adds a [Middleware] to the [Route].
-func (r *Route) With(middlewares ...Middleware) *Route {
+// With adds a [Middleware] to the [SimpleRoute].
+func (r *SimpleRoute) With(middlewares ...Middleware) Route {
 	for _, m := range middlewares {
 		r.middlewares.PushBack(m)
 	}
 	return r
 }
 
-// Name the [Route].
-func (r *Route) Name(name string) *Route {
+// Name the [SimpleRoute].
+func (r *SimpleRoute) Name(name string) Route {
 	r.name = name
 	return r
 }
 
-func (r *Route) Handler(middlewares *list.List) http.Handler {
+// Handler returns the [http.Handler] of the [SimpleRoute].
+func (r *SimpleRoute) Handler(middlewares *list.List) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		ctx := req.Context()
 		if r.name != "" {
@@ -64,4 +81,8 @@ func (r *Route) Handler(middlewares *list.List) http.Handler {
 		}
 		handler(&StatusWriter{ResponseWriter: w}, req.WithContext(ctx))
 	})
+}
+
+func (r *SimpleRoute) Pattern() string {
+	return r.pattern
 }

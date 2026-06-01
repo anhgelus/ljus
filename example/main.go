@@ -19,9 +19,9 @@ func main() {
 	}))
 	r.Use(middleware.Log(log, nil, true, true))
 	r.Use(middleware.SecurityHeaders("example.org", 15*time.Minute))
-	r.HandleFunc("/{$}", func(w http.ResponseWriter, r *http.Request) {
+	r.Handle(ljus.NewRouteFunc("/{$}", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "hello :D")
-	}).Name("root")
+	}).Name("root"))
 
 	l, err := net.Listen("tcp", ":8000")
 	if err != nil {
