@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
@@ -27,7 +28,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	err = r.Serve(l)
+	err = r.Serve(context.TODO(), l)
 	if err != nil {
 		panic(err)
 	}
