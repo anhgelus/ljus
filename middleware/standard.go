@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"tangled.org/anhgelus.world/ljus"
+	"anhgelus.world/ljus"
 )
 
 // Log takes a [slog.Logger] to log every requests.

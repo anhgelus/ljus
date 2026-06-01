@@ -1,3 +1,3 @@
-module tangled.org/anhgelus.world/ljus
+module anhgelus.world/ljus
 
 go 1.25

@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"tangled.org/anhgelus.world/ljus"
-	"tangled.org/anhgelus.world/ljus/middleware"
+	"anhgelus.world/ljus"
+	"anhgelus.world/ljus/middleware"
 )
 
 func main() {

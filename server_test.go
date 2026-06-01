@@ -1,10 +1,12 @@
-package ljus
+package ljus_test
 
 import (
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	. "anhgelus.world/ljus"
 )
 
 func do(t *testing.T, fn func(string) (*http.Response, error), url string, exp string) {
@@ -23,6 +25,7 @@ func do(t *testing.T, fn func(string) (*http.Response, error), url string, exp s
 
 func TestServer(t *testing.T) {
 	s := New()
+
 	s.Handle(NewRouteFunc("GET /foo", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("foo"))
 	}).Name("get foo"))
