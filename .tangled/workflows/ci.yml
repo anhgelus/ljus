@@ -8,11 +8,13 @@ dependencies:
   nixpkgs:
     - go
     - gcc
+    - golangci-lint
 
 steps:
   - name: Lint code
     command: |
       go vet -v ./...
+      golangci-lint run
   - name: Run tests
     command: |
       go test -v -race -cover ./...
