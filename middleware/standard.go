@@ -15,8 +15,9 @@ import (
 // Log takes a [slog.Logger] to log every requests.
 func Log(logger *slog.Logger, logNotFound, logBadRequest bool) ljus.Middleware {
 	return func(next ljus.Handler, w *ljus.StatusWriter, r *http.Request) {
-		log := logger.With("uri", r.RequestURI)
-		name, ok := r.Context().Value(ljus.KeyRouteName).(string)
+		ctx := r.Context()
+		log := logger.With("uri", ctx.Value(ljus.KeyRealURI))
+		name, ok := ctx.Value(ljus.KeyRouteName).(string)
 		if ok {
 			log = log.With("route_name", name)
 		}

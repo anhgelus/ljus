@@ -81,6 +81,7 @@ type key uint
 const (
 	KeyRouteName key = iota
 	KeyCancelContext
+	KeyRealURI
 )
 
 // Handler returns the [http.Handler] behind the [Server].
@@ -108,6 +109,8 @@ func (s *Server) Handler(ctx context.Context) http.Handler {
 		var cancel context.CancelCauseFunc
 		ctx, cancel = context.WithCancelCause(ctx)
 		ctx = context.WithValue(ctx, KeyCancelContext, cancel)
+
+		ctx = context.WithValue(ctx, KeyRealURI, r.RequestURI)
 		mux.ServeHTTP(w, r.WithContext(ctx))
 	})
 
