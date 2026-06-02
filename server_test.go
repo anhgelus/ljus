@@ -1,12 +1,16 @@
 package ljus_test
 
 import (
+	"context"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	. "anhgelus.world/ljus"
+	"anhgelus.world/ljus/middleware"
 )
 
 func do(t *testing.T, fn func(string) (*http.Response, error), url string, exp string) {
@@ -25,6 +29,9 @@ func do(t *testing.T, fn func(string) (*http.Response, error), url string, exp s
 
 func TestServer(t *testing.T) {
 	s := New()
+
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	s.Use(middleware.Log(log, true, true))
 
 	s.Handle(NewRouteFunc("GET /foo", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("foo"))
@@ -46,14 +53,14 @@ func TestServer(t *testing.T) {
 
 	s.Handle(g)
 
-	ts := httptest.NewServer(s.Handler())
+	ts := httptest.NewServer(s.Handler(context.Background()))
 
 	do(t, http.Get, ts.URL+"/foo", "foo")
 	do(t, func(s string) (*http.Response, error) {
 		return http.Post(s, "", nil)
 	}, ts.URL+"/foo", "FOO")
 
-	do(t, http.Get, ts.URL+"/group", "root")
+	do(t, http.Get, ts.URL+"/group/", "root")
 	do(t, http.Get, ts.URL+"/group/bar", "bar")
 	do(t, func(s string) (*http.Response, error) {
 		return http.Post(s, "", nil)

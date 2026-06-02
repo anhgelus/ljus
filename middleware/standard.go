@@ -13,11 +13,7 @@ import (
 )
 
 // Log takes a [slog.Logger] to log every requests.
-func Log(
-	logger *slog.Logger,
-	cancelCause func(context.Context) context.CancelCauseFunc,
-	logNotFound, logBadRequest bool,
-) ljus.Middleware {
+func Log(logger *slog.Logger, logNotFound, logBadRequest bool) ljus.Middleware {
 	return func(next ljus.Handler, w *ljus.StatusWriter, r *http.Request) {
 		log := logger.With("uri", r.RequestURI)
 		name, ok := r.Context().Value(ljus.KeyRouteName).(string)
@@ -29,14 +25,15 @@ func Log(
 			if err := recover(); err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				log.Error("panic!", "error", err, "duration", time.Since(now))
-				if cancelCause == nil {
+				cancelCause, ok := r.Context().Value(ljus.KeyCancelContext).(context.CancelCauseFunc)
+				if !ok || cancelCause == nil {
 					return
 				}
 				switch e := err.(type) {
 				case error:
-					cancelCause(r.Context())(e)
+					cancelCause(e)
 				case string:
-					cancelCause(r.Context())(errors.New(e))
+					cancelCause(errors.New(e))
 				default:
 					log.Warn(
 						"cannot set cancel cause, because error type is not supported",
@@ -47,6 +44,10 @@ func Log(
 		}()
 
 		next(w, r)
+
+		if w.Code == 0 {
+			w.Code = http.StatusOK
+		}
 
 		log = log.With("status", w.Code, "duration", time.Since(now))
 		if w.Code < 400 {

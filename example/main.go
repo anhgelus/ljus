@@ -18,7 +18,7 @@ func main() {
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	}))
-	r.Use(middleware.Log(log, nil, true, true))
+	r.Use(middleware.Log(log, true, true))
 	r.Use(middleware.SecurityHeaders("example.org", 15*time.Minute))
 	r.Handle(ljus.NewRouteFunc("/{$}", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "hello :D")

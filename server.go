@@ -1,6 +1,7 @@
 package ljus
 
 import (
+	"container/list"
 	"context"
 	"errors"
 	"net"
@@ -32,7 +33,7 @@ type Server struct {
 func (s *Server) serve(ctx context.Context, l net.Listener, fn func(net.Listener, http.Handler) error) error {
 	errc := make(chan error, 1)
 	go func() {
-		errc <- fn(l, s.Handler())
+		errc <- fn(l, s.Handler(ctx))
 	}()
 	select {
 	case <-ctx.Done():
@@ -75,13 +76,23 @@ func NewWithBase(mux *http.ServeMux) *Server {
 
 type key uint
 
-var KeyRouteName key = 0
+const (
+	KeyRouteName key = iota
+	KeyCancelContext
+)
 
 // Handler returns the [http.Handler] behind the [Server].
 //
 // See [Server.Serve] and [Server.ServeFastCGI] to serve requests directly.
-func (s *Server) Handler() http.Handler {
-	return s.root.Handler(s.root.inner.middlewares)
+func (s *Server) Handler(ctx context.Context) http.Handler {
+	h := s.root.Handler(list.New())
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var cancel context.CancelCauseFunc
+		ctx, cancel = context.WithCancelCause(ctx)
+		ctx = context.WithValue(ctx, KeyCancelContext, cancel)
+		h.ServeHTTP(w, r.WithContext(ctx))
+	})
+
 }
 
 // Use a middleware for every requests.
