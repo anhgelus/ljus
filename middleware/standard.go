@@ -56,7 +56,9 @@ func Log(logger *slog.Logger, logNotFound, logBadRequest bool) ljus.Middleware {
 			level := slog.LevelDebug
 			if (w.Code == http.StatusNotFound && logNotFound) ||
 				(w.Code == http.StatusBadRequest && logBadRequest) ||
-				(w.Code != http.StatusNotFound && w.Code != http.StatusBadRequest && w.Code != http.StatusTooManyRequests) {
+				(w.Code != http.StatusNotFound &&
+					w.Code != http.StatusBadRequest &&
+					w.Code != http.StatusTooManyRequests) {
 				level = slog.LevelWarn
 			}
 			log.Log(context.Background(), level, "invalid request")

@@ -35,21 +35,21 @@ func TestServer(t *testing.T) {
 
 	s.Handle(NewRouteFunc("GET /foo", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("foo"))
-	}).Name("get foo"))
+	}).SetName("get foo"))
 	s.Handle(NewRouteFunc("POST /foo", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("FOO"))
-	}).Name("post foo"))
+	}).SetName("post foo"))
 
 	g := NewGroup("/group")
 	g.Add(NewRouteFunc("/{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("root"))
-	}).Name("group root"))
+	}).SetName("group root"))
 	g.Add(NewRouteFunc("GET /bar", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("bar"))
-	}).Name("get bar"))
+	}).SetName("get bar"))
 	g.Add(NewRouteFunc("POST /bar", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("BAR"))
-	}).Name("post bar"))
+	}).SetName("post bar"))
 
 	s.Handle(g)
 
@@ -65,4 +65,12 @@ func TestServer(t *testing.T) {
 	do(t, func(s string) (*http.Response, error) {
 		return http.Post(s, "", nil)
 	}, ts.URL+"/group/bar", "BAR")
+
+	resp, err := http.Get(ts.URL + "/empty")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != 404 {
+		t.Errorf("invalid status code: %d, wanted %d", resp.StatusCode, 404)
+	}
 }

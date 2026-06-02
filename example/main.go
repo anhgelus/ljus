@@ -22,7 +22,7 @@ func main() {
 	r.Use(middleware.SecurityHeaders("example.org", 15*time.Minute))
 	r.Handle(ljus.NewRouteFunc("/{$}", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "hello :D")
-	}).Name("root"))
+	}).SetName("root"))
 
 	l, err := net.Listen("tcp", ":8000")
 	if err != nil {

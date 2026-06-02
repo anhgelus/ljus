@@ -27,7 +27,19 @@ type Middleware func(Handler, *StatusWriter, *http.Request)
 
 // Server is handling requests.
 type Server struct {
-	root *Group
+	// NotFoundHandler is called when no other handler is available.
+	NotFoundHandler http.Handler
+	middlewares     *list.List
+	routes          *list.List
+}
+
+// New returns a new [Server] with the default [http.ServeMux].
+func New() *Server {
+	return &Server{
+		NotFoundHandler: http.NotFoundHandler(),
+		middlewares:     list.New(),
+		routes:          list.New(),
+	}
 }
 
 func (s *Server) serve(ctx context.Context, l net.Listener, fn func(net.Listener, http.Handler) error) error {
@@ -64,16 +76,6 @@ func (s *Server) ServeFastCGI(ctx context.Context, l net.Listener) error {
 	return s.serve(ctx, l, fcgi.Serve)
 }
 
-// New returns a new [Server] with the default [http.ServeMux].
-func New() *Server {
-	return NewWithBase(http.NewServeMux())
-}
-
-// New returns a new [Server] with a given [http.ServeMux].
-func NewWithBase(mux *http.ServeMux) *Server {
-	return &Server{NewGroup("")}
-}
-
 type key uint
 
 const (
@@ -85,23 +87,37 @@ const (
 //
 // See [Server.Serve] and [Server.ServeFastCGI] to serve requests directly.
 func (s *Server) Handler(ctx context.Context) http.Handler {
-	h := s.root.Handler(list.New())
+	mux := http.NewServeMux()
+	var homeHandler http.Handler
+	for e := s.routes.Front(); e != nil; e = e.Next() {
+		route := e.Value.(Route).Clone()
+		if route.Pattern() != "/" {
+			mux.Handle(route.Pattern(), route.Handler(s.middlewares))
+		} else {
+			homeHandler = route.Handler(s.middlewares)
+		}
+	}
+	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.RequestURI != "/" || homeHandler == nil {
+			s.NotFoundHandler.ServeHTTP(w, r)
+		} else {
+			homeHandler.ServeHTTP(w, r)
+		}
+	}))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var cancel context.CancelCauseFunc
 		ctx, cancel = context.WithCancelCause(ctx)
 		ctx = context.WithValue(ctx, KeyCancelContext, cancel)
-		h.ServeHTTP(w, r.WithContext(ctx))
+		mux.ServeHTTP(w, r.WithContext(ctx))
 	})
 
 }
 
-// Use a middleware for every requests.
+// Use a [Middleware] for every requests.
 func (s *Server) Use(middlewares ...Middleware) {
-	for _, middle := range middlewares {
-		s.root.inner.middlewares.PushFront(func(next Handler) Handler {
-			return func(w *StatusWriter, r *http.Request) {
-				middle(next, w, r)
-			}
+	for _, m := range middlewares {
+		s.middlewares.PushFront(func(next Handler) Handler {
+			return func(w *StatusWriter, r *http.Request) { m(next, w, r) }
 		})
 	}
 }
@@ -109,7 +125,9 @@ func (s *Server) Use(middlewares ...Middleware) {
 // Handle a [Route].
 //
 // See [NewRoute] and [NewGroup].
-func (s *Server) Handle(r Route) *Server {
-	s.root.Add(r)
+func (s *Server) Handle(routes ...Route) *Server {
+	for _, m := range routes {
+		s.routes.PushFront(m)
+	}
 	return s
 }

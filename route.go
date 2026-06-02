@@ -7,18 +7,31 @@ import (
 )
 
 // Route represents a general HTTP route.
+// It can be used concurrently.
 //
 // See [SimpleRoute].
 // See [Group].
 type Route interface {
 	// Handler returns the [http.Handler] used.
 	Handler(middlewares *list.List) http.Handler
-	// Sets the Name of the [Route].
-	Name(name string) Route
+	// SetName of the [Route].
+	SetName(name string) Route
+	// Name of the [Route].
+	Name() string
 	// With add a [Middleware] to the [Route].
 	With(middlewares ...Middleware) Route
 	// Pattern returns the [http.ServeMux] pattern.
 	Pattern() string
+	// Clone the [Route].
+	Clone() Route
+}
+
+func copyList(old *list.List) *list.List {
+	l := list.New()
+	for e := old.Back(); e != nil; e = e.Prev() {
+		l.PushFront(e.Value)
+	}
+	return l
 }
 
 // SimpleRoute is just a [Route].
@@ -35,13 +48,12 @@ type SimpleRoute struct {
 //
 // See [Server.HandleFunc].
 func NewRoute(pattern string, handler http.Handler) *SimpleRoute {
-	r := &SimpleRoute{
+	return &SimpleRoute{
 		pattern:     pattern,
 		handler:     func(w *StatusWriter, r *http.Request) { handler.ServeHTTP(w, r) },
 		name:        "",
 		middlewares: list.New(),
 	}
-	return r
 }
 
 // HandleFunc returns a new [SimpleRoute] called for the specified pattern.
@@ -53,16 +65,21 @@ func NewRouteFunc(pattern string, handler http.HandlerFunc) *SimpleRoute {
 
 // With adds a [Middleware] to the [SimpleRoute].
 func (r *SimpleRoute) With(middlewares ...Middleware) Route {
+	r.middlewares = copyList(r.middlewares)
 	for _, m := range middlewares {
 		r.middlewares.PushBack(m)
 	}
 	return r
 }
 
-// Name the [SimpleRoute].
-func (r *SimpleRoute) Name(name string) Route {
+// SetName the [SimpleRoute].
+func (r *SimpleRoute) SetName(name string) Route {
 	r.name = name
 	return r
+}
+
+func (r *SimpleRoute) Name() string {
+	return r.name
 }
 
 // Handler returns the [http.Handler] of the [SimpleRoute].
@@ -72,17 +89,28 @@ func (r *SimpleRoute) Handler(middlewares *list.List) http.Handler {
 		if r.name != "" {
 			ctx = context.WithValue(ctx, KeyRouteName, r.name)
 		}
-		handler := r.handler
-		for e := middlewares.Back(); e != nil; e = e.Prev() {
-			handler = e.Value.(func(Handler) Handler)(handler)
-		}
-		for e := r.middlewares.Back(); e != nil; e = e.Prev() {
-			handler = e.Value.(func(Handler) Handler)(handler)
-		}
+		handler := generateHandler(r.handler, r.middlewares, middlewares)
 		handler(&StatusWriter{ResponseWriter: w}, req.WithContext(ctx))
 	})
 }
 
 func (r *SimpleRoute) Pattern() string {
 	return r.pattern
+}
+
+func (r *SimpleRoute) Clone() Route {
+	cl := *r
+	cl.middlewares = copyList(cl.middlewares)
+	return &cl
+}
+
+func generateHandler(base Handler, given *list.List, internal *list.List) Handler {
+	handler := base
+	for e := internal.Back(); e != nil; e = e.Prev() {
+		handler = e.Value.(func(Handler) Handler)(handler)
+	}
+	for e := given.Back(); e != nil; e = e.Prev() {
+		handler = e.Value.(func(Handler) Handler)(handler)
+	}
+	return handler
 }
