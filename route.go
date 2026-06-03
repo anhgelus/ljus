@@ -18,8 +18,8 @@ type Route interface {
 	SetName(name string) Route
 	// Name of the [Route].
 	Name() string
-	// With add a [Middleware] to the [Route].
-	With(middlewares ...Middleware) Route
+	// Use a [Middleware] with the [Route].
+	Use(middlewares ...Middleware) Route
 	// Pattern returns the [http.ServeMux] pattern.
 	Pattern() string
 	// Clone the [Route].
@@ -63,8 +63,7 @@ func NewRouteFunc(pattern string, handler http.HandlerFunc) *SimpleRoute {
 	return NewRoute(pattern, http.HandlerFunc(handler))
 }
 
-// With adds a [Middleware] to the [SimpleRoute].
-func (r *SimpleRoute) With(middlewares ...Middleware) Route {
+func (r *SimpleRoute) Use(middlewares ...Middleware) Route {
 	r.middlewares = copyList(r.middlewares)
 	for _, m := range middlewares {
 		r.middlewares.PushBack(m)
@@ -72,7 +71,6 @@ func (r *SimpleRoute) With(middlewares ...Middleware) Route {
 	return r
 }
 
-// SetName the [SimpleRoute].
 func (r *SimpleRoute) SetName(name string) Route {
 	r.name = name
 	return r
@@ -82,7 +80,6 @@ func (r *SimpleRoute) Name() string {
 	return r.name
 }
 
-// Handler returns the [http.Handler] of the [SimpleRoute].
 func (r *SimpleRoute) Handler(middlewares *list.List) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		ctx := req.Context()

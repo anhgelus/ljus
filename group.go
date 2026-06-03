@@ -58,7 +58,7 @@ func (g *Group) Handler(middlewares *list.List) http.Handler {
 	})
 }
 
-func (g *Group) With(middlewares ...Middleware) Route {
+func (g *Group) Use(middlewares ...Middleware) Route {
 	for _, m := range middlewares {
 		g.middlewares.PushFront(m)
 	}

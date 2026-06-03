@@ -23,7 +23,8 @@ func (w *StatusWriter) WriteHeader(statusCode int) {
 // Handler is a custom [http.HandlerFunc] taking a [StatusWriter] instead of a [http.ResponseWriter].
 type Handler func(*StatusWriter, *http.Request)
 
-type Middleware func(Handler, *StatusWriter, *http.Request)
+// Middleware is a [Handler] taking the next [Handler] to call.
+type Middleware func(next Handler, w *StatusWriter, r *http.Request)
 
 // Server is handling requests.
 type Server struct {
@@ -64,6 +65,8 @@ func (s *Server) serve(ctx context.Context, l net.Listener, fn func(net.Listener
 //
 // See [Server.ServeFastCGI] to handles HTTP requests over FastCGI.
 // See [Server.Handler] to get a [http.handler].
+//
+// See [SocketListener] if you want to use a unix socket.
 func (s *Server) Serve(ctx context.Context, l net.Listener) error {
 	return s.serve(ctx, l, http.Serve)
 }
@@ -72,6 +75,8 @@ func (s *Server) Serve(ctx context.Context, l net.Listener) error {
 //
 // See [Server.Serve] to handles HTTP requests.
 // See [Server.Handler] to get a [http.handler].
+//
+// See [SocketListener] if you want to use a unix socket.
 func (s *Server) ServeFastCGI(ctx context.Context, l net.Listener) error {
 	return s.serve(ctx, l, fcgi.Serve)
 }
@@ -89,7 +94,7 @@ const (
 // See [Server.Serve] and [Server.ServeFastCGI] to serve requests directly.
 func (s *Server) Handler(ctx context.Context) http.Handler {
 	mux := http.NewServeMux()
-	var homeHandler http.Handler
+	homeHandler := s.NotFoundHandler
 	for e := s.routes.Front(); e != nil; e = e.Next() {
 		route := e.Value.(Route).Clone()
 		if route.Pattern() != "/" {
@@ -99,7 +104,7 @@ func (s *Server) Handler(ctx context.Context) http.Handler {
 		}
 	}
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.RequestURI != "/" || homeHandler == nil {
+		if r.RequestURI != "/" {
 			s.NotFoundHandler.ServeHTTP(w, r)
 		} else {
 			homeHandler.ServeHTTP(w, r)
@@ -113,7 +118,6 @@ func (s *Server) Handler(ctx context.Context) http.Handler {
 		ctx = context.WithValue(ctx, KeyRealURI, r.RequestURI)
 		mux.ServeHTTP(w, r.WithContext(ctx))
 	})
-
 }
 
 // Use a [Middleware] for every requests.
