@@ -103,10 +103,10 @@ func (r *SimpleRoute) Clone() Route {
 
 func generateHandler(base Handler, given *list.List, internal *list.List) Handler {
 	handler := base
-	for e := internal.Back(); e != nil; e = e.Prev() {
+	for e := internal.Front(); e != nil; e = e.Next() {
 		handler = e.Value.(func(Handler) Handler)(handler)
 	}
-	for e := given.Back(); e != nil; e = e.Prev() {
+	for e := given.Front(); e != nil; e = e.Next() {
 		handler = e.Value.(func(Handler) Handler)(handler)
 	}
 	return handler
