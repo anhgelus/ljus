@@ -60,7 +60,7 @@ func NewRoute(pattern string, handler http.Handler) *SimpleRoute {
 //
 // See [Server.Handle].
 func NewRouteFunc(pattern string, handler http.HandlerFunc) *SimpleRoute {
-	return NewRoute(pattern, http.HandlerFunc(handler))
+	return NewRoute(pattern, handler)
 }
 
 func (r *SimpleRoute) Use(middlewares ...Middleware) Route {

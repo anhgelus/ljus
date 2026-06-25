@@ -94,7 +94,10 @@ const (
 // See [Server.Serve] and [Server.ServeFastCGI] to serve requests directly.
 func (s *Server) Handler(ctx context.Context) http.Handler {
 	mux := http.NewServeMux()
-	homeHandler := s.NotFoundHandler
+	nf := NewRoute("/", s.NotFoundHandler).
+		SetName("not found").
+		Handler(s.middlewares)
+	homeHandler := nf
 	for e := s.routes.Front(); e != nil; e = e.Next() {
 		route := e.Value.(Route).Clone()
 		if route.Pattern() != "/" {
@@ -105,7 +108,7 @@ func (s *Server) Handler(ctx context.Context) http.Handler {
 	}
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.RequestURI != "/" {
-			s.NotFoundHandler.ServeHTTP(w, r)
+			nf.ServeHTTP(w, r)
 		} else {
 			homeHandler.ServeHTTP(w, r)
 		}
@@ -114,7 +117,6 @@ func (s *Server) Handler(ctx context.Context) http.Handler {
 		var cancel context.CancelCauseFunc
 		ctx, cancel = context.WithCancelCause(ctx)
 		ctx = context.WithValue(ctx, KeyCancelContext, cancel)
-
 		ctx = context.WithValue(ctx, KeyRealURI, r.RequestURI)
 		mux.ServeHTTP(w, r.WithContext(ctx))
 	})
