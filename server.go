@@ -16,7 +16,9 @@ type StatusWriter struct {
 }
 
 func (w *StatusWriter) WriteHeader(statusCode int) {
-	w.ResponseWriter.WriteHeader(statusCode)
+	if statusCode != http.StatusOK && statusCode != w.Code {
+		w.ResponseWriter.WriteHeader(statusCode)
+	}
 	w.Code = statusCode
 }
 
