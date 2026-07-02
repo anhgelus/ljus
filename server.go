@@ -30,18 +30,15 @@ type Middleware func(next Handler, w *StatusWriter, r *http.Request)
 
 // Server is handling requests.
 type Server struct {
-	// NotFoundHandler is called when no other handler is available.
-	NotFoundHandler http.Handler
-	middlewares     *list.List
-	routes          *list.List
+	middlewares *list.List
+	routes      *list.List
 }
 
 // New returns a new [Server] with the default [http.ServeMux].
 func New() *Server {
 	return &Server{
-		NotFoundHandler: http.NotFoundHandler(),
-		middlewares:     list.New(),
-		routes:          list.New(),
+		middlewares: list.New(),
+		routes:      list.New(),
 	}
 }
 
@@ -96,25 +93,10 @@ const (
 // See [Server.Serve] and [Server.ServeFastCGI] to serve requests directly.
 func (s *Server) Handler(ctx context.Context) http.Handler {
 	mux := http.NewServeMux()
-	nf := NewRoute("/", s.NotFoundHandler).
-		SetName("not found").
-		Handler(s.middlewares)
-	homeHandler := nf
 	for e := s.routes.Front(); e != nil; e = e.Next() {
 		route := e.Value.(Route).Clone()
-		if route.Pattern() != "/" {
-			mux.Handle(route.Pattern(), route.Handler(s.middlewares))
-		} else {
-			homeHandler = route.Handler(s.middlewares)
-		}
+		mux.Handle(route.Pattern(), route.Handler(s.middlewares))
 	}
-	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.RequestURI != "/" {
-			nf.ServeHTTP(w, r)
-		} else {
-			homeHandler.ServeHTTP(w, r)
-		}
-	}))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var cancel context.CancelCauseFunc
 		ctx, cancel = context.WithCancelCause(ctx)
