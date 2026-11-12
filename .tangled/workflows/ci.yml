@@ -2,15 +2,13 @@ when:
   - event: ["push", "pull_request"]
     branch: main
 
-engine: nixery
-
-dependencies:
-  nixpkgs:
-    - go
-    - gcc
-    - golangci-lint
+engine: microvm
+image: alpine
 
 steps:
+  - name: Installing deps
+    command: |
+      apk add --no-cache go golangci-lint
   - name: Lint code
     command: |
       go vet -v ./...
