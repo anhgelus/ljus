@@ -1,7 +1,6 @@
 package ljus_test
 
 import (
-	"context"
 	"io"
 	"log/slog"
 	"net/http"
@@ -53,7 +52,7 @@ func TestServer(t *testing.T) {
 
 	s.Handle(g)
 
-	ts := httptest.NewServer(s.Handler(context.Background()))
+	ts := httptest.NewServer(s.Handler())
 
 	do(t, http.Get, ts.URL+"/foo", "foo")
 	do(t, func(s string) (*http.Response, error) {

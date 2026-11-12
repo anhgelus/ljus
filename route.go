@@ -39,7 +39,7 @@ func copyList(old *list.List) *list.List {
 // See [Group] to group multiple [Route].
 type SimpleRoute struct {
 	pattern     string
-	handler     Handler
+	handler     http.Handler
 	name        string
 	middlewares *list.List
 }
@@ -50,7 +50,7 @@ type SimpleRoute struct {
 func NewRoute(pattern string, handler http.Handler) *SimpleRoute {
 	return &SimpleRoute{
 		pattern:     pattern,
-		handler:     func(w *StatusWriter, r *http.Request) { handler.ServeHTTP(w, r) },
+		handler:     handler,
 		name:        "",
 		middlewares: list.New(),
 	}
@@ -87,7 +87,12 @@ func (r *SimpleRoute) Handler(middlewares *list.List) http.Handler {
 			ctx = context.WithValue(ctx, KeyRouteName, r.name)
 		}
 		handler := generateHandler(r.handler, r.middlewares, middlewares)
-		handler(&StatusWriter{ResponseWriter: w}, req.WithContext(ctx))
+		switch w.(type) {
+		case *StatusWriter:
+			handler.ServeHTTP(w, req.WithContext(ctx))
+		default:
+			handler.ServeHTTP(&StatusWriter{ResponseWriter: w}, req.WithContext(ctx))
+		}
 	})
 }
 
@@ -101,13 +106,13 @@ func (r *SimpleRoute) Clone() Route {
 	return &cl
 }
 
-func generateHandler(base Handler, given *list.List, internal *list.List) Handler {
+func generateHandler(base http.Handler, given *list.List, internal *list.List) http.Handler {
 	handler := base
 	for e := internal.Front(); e != nil; e = e.Next() {
-		handler = e.Value.(func(Handler) Handler)(handler)
+		handler = e.Value.(func(http.Handler) http.Handler)(handler)
 	}
 	for e := given.Front(); e != nil; e = e.Next() {
-		handler = e.Value.(func(Handler) Handler)(handler)
+		handler = e.Value.(func(http.Handler) http.Handler)(handler)
 	}
 	return handler
 }

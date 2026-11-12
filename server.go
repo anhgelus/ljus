@@ -16,17 +16,12 @@ type StatusWriter struct {
 }
 
 func (w *StatusWriter) WriteHeader(statusCode int) {
-	if statusCode != http.StatusOK && statusCode != w.Code {
-		w.ResponseWriter.WriteHeader(statusCode)
-	}
 	w.Code = statusCode
+	w.ResponseWriter.WriteHeader(statusCode)
 }
 
-// Handler is a custom [http.HandlerFunc] taking a [StatusWriter] instead of a [http.ResponseWriter].
-type Handler func(*StatusWriter, *http.Request)
-
 // Middleware is a [Handler] taking the next [Handler] to call.
-type Middleware func(next Handler, w *StatusWriter, r *http.Request)
+type Middleware = func(next http.Handler, w http.ResponseWriter, r *http.Request)
 
 // Server is handling requests.
 type Server struct {
@@ -45,7 +40,7 @@ func New() *Server {
 func (s *Server) serve(ctx context.Context, l net.Listener, fn func(net.Listener, http.Handler) error) error {
 	errc := make(chan error, 1)
 	go func() {
-		errc <- fn(l, s.Handler(ctx))
+		errc <- fn(l, s.Handler())
 	}()
 	select {
 	case <-ctx.Done():
@@ -91,15 +86,14 @@ const (
 // Handler returns the [http.Handler] behind the [Server].
 //
 // See [Server.Serve] and [Server.ServeFastCGI] to serve requests directly.
-func (s *Server) Handler(ctx context.Context) http.Handler {
+func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	for e := s.routes.Front(); e != nil; e = e.Next() {
 		route := e.Value.(Route).Clone()
 		mux.Handle(route.Pattern(), route.Handler(s.middlewares))
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var cancel context.CancelCauseFunc
-		ctx, cancel = context.WithCancelCause(ctx)
+		ctx, cancel := context.WithCancelCause(context.Background())
 		ctx = context.WithValue(ctx, KeyCancelContext, cancel)
 		ctx = context.WithValue(ctx, KeyRealURI, r.RequestURI)
 		mux.ServeHTTP(w, r.WithContext(ctx))
@@ -109,8 +103,8 @@ func (s *Server) Handler(ctx context.Context) http.Handler {
 // Use a [Middleware] for every requests.
 func (s *Server) Use(middlewares ...Middleware) {
 	for _, m := range middlewares {
-		s.middlewares.PushFront(func(next Handler) Handler {
-			return func(w *StatusWriter, r *http.Request) { m(next, w, r) }
+		s.middlewares.PushFront(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { m(next, w, r) })
 		})
 	}
 }

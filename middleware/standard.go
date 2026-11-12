@@ -14,7 +14,7 @@ import (
 
 // Log takes a [slog.Logger] to log every requests.
 func Log(logger *slog.Logger, logNotFound, logBadRequest bool) ljus.Middleware {
-	return func(next ljus.Handler, w *ljus.StatusWriter, r *http.Request) {
+	return func(next http.Handler, w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		log := logger.With("uri", ctx.Value(ljus.KeyRealURI))
 		name, ok := ctx.Value(ljus.KeyRouteName).(string)
@@ -26,7 +26,7 @@ func Log(logger *slog.Logger, logNotFound, logBadRequest bool) ljus.Middleware {
 			if err := recover(); err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				log.Error("panic!", "error", err, "duration", time.Since(now))
-				cancelCause, ok := r.Context().Value(ljus.KeyCancelContext).(context.CancelCauseFunc)
+				cancelCause, ok := ctx.Value(ljus.KeyCancelContext).(context.CancelCauseFunc)
 				if !ok || cancelCause == nil {
 					return
 				}
@@ -44,22 +44,23 @@ func Log(logger *slog.Logger, logNotFound, logBadRequest bool) ljus.Middleware {
 			}
 		}()
 
-		next(w, r)
+		next.ServeHTTP(w, r)
 
-		if w.Code == 0 {
-			w.Code = http.StatusOK
+		code := w.(*ljus.StatusWriter).Code
+		if code == 0 {
+			code = http.StatusOK
 		}
 
-		log = log.With("status", w.Code, "duration", time.Since(now))
-		if w.Code < 400 {
+		log = log.With("status", code, "duration", time.Since(now))
+		if code < 400 {
 			log.Debug("handled")
-		} else if w.Code < 500 {
+		} else if code < 500 {
 			level := slog.LevelDebug
-			if (w.Code == http.StatusNotFound && logNotFound) ||
-				(w.Code == http.StatusBadRequest && logBadRequest) ||
-				(w.Code != http.StatusNotFound &&
-					w.Code != http.StatusBadRequest &&
-					w.Code != http.StatusTooManyRequests) {
+			if (code == http.StatusNotFound && logNotFound) ||
+				(code == http.StatusBadRequest && logBadRequest) ||
+				(code != http.StatusNotFound &&
+					code != http.StatusBadRequest &&
+					code != http.StatusTooManyRequests) {
 				level = slog.LevelWarn
 			}
 			log.Log(context.Background(), level, "invalid request")
@@ -74,7 +75,7 @@ func SecurityHeaders(domain string, cacheDur time.Duration) ljus.Middleware {
 	if cacheDur == 0 {
 		cacheDur = 15 * time.Minute
 	}
-	return func(next ljus.Handler, w *ljus.StatusWriter, r *http.Request) {
+	return func(next http.Handler, w http.ResponseWriter, r *http.Request) {
 		// prevent tracking
 		w.Header().Add("Referrer-Policy", "strict-origin-when-cross-origin")
 		// prevent iframe
@@ -89,6 +90,6 @@ func SecurityHeaders(domain string, cacheDur time.Duration) ljus.Middleware {
 		// caching
 		w.Header().Add("Access-Control-Max-Age", fmt.Sprintf("%.0f", math.Floor(cacheDur.Seconds())))
 
-		next(w, r)
+		next.ServeHTTP(w, r)
 	}
 }
