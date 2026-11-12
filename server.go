@@ -40,7 +40,7 @@ func New() *Server {
 func (s *Server) serve(ctx context.Context, l net.Listener, fn func(net.Listener, http.Handler) error) error {
 	errc := make(chan error, 1)
 	go func() {
-		errc <- fn(l, s.Handler())
+		errc <- fn(l, s.Handler(ctx))
 	}()
 	select {
 	case <-ctx.Done():
@@ -86,14 +86,14 @@ const (
 // Handler returns the [http.Handler] behind the [Server].
 //
 // See [Server.Serve] and [Server.ServeFastCGI] to serve requests directly.
-func (s *Server) Handler() http.Handler {
+func (s *Server) Handler(ctx context.Context) http.Handler {
 	mux := http.NewServeMux()
 	for e := s.routes.Front(); e != nil; e = e.Next() {
 		route := e.Value.(Route).Clone()
 		mux.Handle(route.Pattern(), route.Handler(s.middlewares))
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithCancelCause(context.Background())
+		ctx, cancel := context.WithCancelCause(ctx)
 		ctx = context.WithValue(ctx, KeyCancelContext, cancel)
 		ctx = context.WithValue(ctx, KeyRealURI, r.RequestURI)
 		mux.ServeHTTP(w, r.WithContext(ctx))

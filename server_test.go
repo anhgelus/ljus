@@ -52,7 +52,7 @@ func TestServer(t *testing.T) {
 
 	s.Handle(g)
 
-	ts := httptest.NewServer(s.Handler())
+	ts := httptest.NewServer(s.Handler(t.Context()))
 
 	do(t, http.Get, ts.URL+"/foo", "foo")
 	do(t, func(s string) (*http.Response, error) {
